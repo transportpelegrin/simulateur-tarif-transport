@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Simulateur Tarif Transport Pelegrin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;padding:1rem;max-width:800px;margin:auto}
+</style>
+</head>
+<body>
+<!-- -------------  CODE SIMULATEUR V5 ------------- -->
+<!-- Simulateur Transport Pelegrin – V5 : calcul horaire chauffeur + haut‑le‑pied distinct -->
+<style>
+  #map{height:300px;margin-top:1rem;border:1px solid #ccc;border-radius:6px}
+  #simu label{display:block;margin-top:0.6rem;font-weight:600}
+  #simu input,#simu select,#simu button{padding:0.45rem;font-size:1rem;width:100%;max-width:380px}
+</style>
+<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB9SYfuVENg3ZPMH5clvnjaKXkC-iGHnSA&libraries=places&callback=init"></script>
+<div id="simu">
+  <h2>Simulateur de tarif – Transport Pelegrin</h2>
+  <label>Départ (où l’on vous récupère)
+    <input id="orig" placeholder="Ex. Hôtel Mercure, Cayenne" required>
+  </label>
+  <label>Destination
+    <input id="dest" placeholder="Ex. Aéroport Cayenne" required>
+  </label>
+  <label>Véhicule
+    <select id="vehicule" required></select>
+  </label>
+  <button id="btnSimu">Simuler</button>
+  <div id="map"></div>
+  <div id="result" style="margin-top:0.8rem;font-weight:bold"></div>
+
+  <form id="formResa" onsubmit="return reserver(event)" style="margin-top:1rem;display:none;">
+    <h3>Réserver ce trajet</h3>
+    <input id="nom"  placeholder="Nom"       required>
+    <input id="tel"  placeholder="Téléphone / WhatsApp" required>
+    <input id="mail" type="email" placeholder="E‑mail (facultatif)">
+    <button id="reserve">Envoyer la réservation</button>
+  </form>
+</div>
+
+<script>
+const WHATSAPP_NUM = '596694091522';
+const VEHICLES = [
+  {id:'c3',        label:'C3 – Diesel (5,5 L/100 clim)',  conso:5.5, fuel:'diesel'},
+  {id:'c4',        label:'C4 – Essence (7 L/100 clim)',   conso:7,   fuel:'essence'},
+  {id:'suv5008',   label:'5008 SUV – Diesel (7,5 L/100)', conso:7.5, fuel:'diesel'},
+  {id:'minibus',   label:'Minibus – Diesel (10 L/100)',   conso:10,  fuel:'diesel'}
+];
+const FUEL_PRICES = { diesel:1.81, essence:1.95 };
+const DRIVER_RATE = 14.85;
+const MARGIN      = 0.20;
+const PICKUP_FEE  = 10;
+const BASE_ORIGIN = {lat:4.939569, lng:-52.452077};
+
+let map, autoOrig, autoDest, dirSvc, dirRdr;
+
+function init(){
+  map = new google.maps.Map(document.getElementById('map'),{center:BASE_ORIGIN,zoom:11});
+  new google.maps.marker.AdvancedMarkerElement({map,position:BASE_ORIGIN,title:'Dépôt'});
+  autoOrig = new google.maps.places.Autocomplete(orig,{componentRestrictions:{country:'gf'}});
+  autoDest = new google.maps.places.Autocomplete(dest,{componentRestrictions:{country:'gf'}});
+  dirSvc = new google.maps.DirectionsService();
+  dirRdr = new google.maps.DirectionsRenderer({map});
+  VEHICLES.forEach(v=>vehicule.add(new Option(v.label,v.id)));
+  btnSimu.onclick = simuler;
+}
+
+function calcLegCost(km,hr,veh,isCommercial){
+  const litres=(veh.conso/100)*km;
+  const fuel=litres*FUEL_PRICES[veh.fuel];
+  const driver=hr*DRIVER_RATE;
+  let cost=fuel+driver;
+  if(isCommercial) cost*=1+MARGIN;
+  return cost;
+}
+
+function simuler(){
+  result.textContent='';formResa.style.display='none';
+  const start=orig.value.trim(),end=dest.value.trim();
+  if(!start||!end){alert('Indiquez départ et destination');return;}
+  const veh=VEHICLES.find(v=>v.id===vehicule.value)||VEHICLES[0];
+  dirSvc.route({origin:BASE_ORIGIN,destination:BASE_ORIGIN,waypoints:[{location:start},{location:end}],travelMode:'DRIVING'},(res,status)=>{
+    if(status!=='OK'){alert('Itinéraire introuvable');return;}
+    dirRdr.setDirections(res);
+    const [h1,main,h2]=res.routes[0].legs;
+    const kmH1=h1.distance.value/1000, kmMain=main.distance.value/1000, kmH2=h2.distance.value/1000;
+    const hrH1=h1.duration.value/3600, hrMain=main.duration.value/3600, hrH2=h2.duration.value/3600;
+    const total=(calcLegCost(kmH1,hrH1,veh,false)+calcLegCost(kmMain,hrMain,veh,true)+calcLegCost(kmH2,hrH2,veh,false)+PICKUP_FEE).toFixed(2);
+    result.textContent=`≈ ${total} € • ${(kmH1+kmMain+kmH2).toFixed(1)} km`;
+    formResa.style.display='block';
+  });
+}
+
+function reserver(e){
+  e.preventDefault();
+  const message=`Réservation – ${nom.value}\nDépart : ${orig.value}\nDestination : ${dest.value}\n${result.textContent}`;
+  window.open(`https://wa.me/${WHATSAPP_NUM}?text=${encodeURIComponent(message)}`,'_blank');
+}
+</script>
+</body>
+</html>
